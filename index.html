@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoScreen Player</title>
+    <link rel="stylesheet" href="/echoscreen-player/style.css">
+</head>
+<body>
+    <div class="page-header">
+        <h1>EchoScreen Player</h1>
+    </div>
+    
+    <div class="container">
+        <div class="main-layout">
+            <div class="left-panel">
+                <div class="player">
+                    <div class="file-upload">
+                        <div class="upload-section">
+                            <label for="folderInput">选择文件夹:</label>
+                            <input type="file" id="folderInput" webkitdirectory directory multiple>
+                        </div>
+                    </div>
+                    
+                    <div class="playlist-container">
+                        <h3>播放列表</h3>
+                        <div class="playlist" id="playlist">
+                            <div class="playlist-placeholder">请上传文件夹</div>
+                        </div>
+                    </div>
+
+                    <div class="audio-info">
+                        <div class="current-song">
+                            <span id="songTitle">未选择音频文件</span>
+                        </div>
+                        <div class="current-time">
+                            <span id="currentTime">00:00</span> / <span id="totalTime">00:00</span>
+                        </div>
+                    </div>
+
+                    <div class="controls">
+                        <div class="control-buttons">
+                            <button id="playPauseBtn" class="control-btn">
+                                <span class="play-icon">▶</span>
+                            </button>
+                            <button id="prevBtn" class="control-btn">⏮</button>
+                            <button id="nextBtn" class="control-btn">⏭</button>
+                            <button id="loopBtn" class="control-btn" title="单句循环">
+                                🔁
+                                <span class="status-indicator"></span>
+                            </button>
+                        </div>
+                        
+                        <div class="speed-control">
+                            <label for="speedSelect">倍速:</label>
+                            <select id="speedSelect">
+                                <option value="0.5">0.5x</option>
+                                <option value="0.75">0.75x</option>
+                                <option value="1" selected>1x</option>
+                                <option value="1.25">1.25x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2">2x</option>
+                            </select>
+                        </div>
+                        
+                        <div class="translation-control">
+                            <button id="translationToggle" class="control-btn" title="切换中文翻译">
+                                <span id="translationIcon">🌐</span>
+                                <span id="translationText">显示翻译</span>
+                                <span class="status-indicator"></span>
+                            </button>
+                        </div>
+                        
+                        <div class="timer-control">
+                            <input type="number" id="timerInput" min="1" max="999" placeholder="分钟" title="设置定时暂停时间（分钟）">
+                            <button id="timerBtn" class="control-btn" title="定时暂停">
+                                <span id="timerIcon">⏰</span>
+                                <span id="timerText">定时</span>
+                                <span class="status-indicator"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <input type="range" id="progressSlider" min="0" max="100" value="0" class="progress-slider">
+                    </div>
+
+                    <div class="volume-control">
+                        <label for="volumeSlider">🔊</label>
+                        <div class="volume-container">
+                            <input type="range" id="volumeSlider" min="0" max="100" value="100" class="volume-slider">
+                            <span class="volume-percentage" id="volumePercentage">100%</span>
+                        </div>
+                    </div>
+                    
+
+                </div>
+            </div>
+            
+            <div class="right-panel">
+                <div class="lyrics-container">
+                    <h3>文本</h3>
+                    <div id="lyrics" class="lyrics">
+                        <div class="lyric-placeholder">请上传LRC文件</div>
+                    </div>
+                </div>
+                <div class="favorites-container">
+                    <div class="favorites-header">
+                        <h3>收藏夹</h3>
+                        <div class="favorites-controls">
+                            <button id="importFavoritesBtn" class="import-favorites-btn" title="导入收藏">📁</button>
+                            <button id="saveFavoritesBtn" class="save-favorites-btn" title="保存为TXT">💾</button>
+                            <button id="clearFavoritesBtn" class="clear-favorites-btn" title="清空所有收藏">🗑️</button>
+                        </div>
+                    </div>
+                    <div id="favorites" class="favorites">
+                        <div class="favorites-placeholder">暂无收藏</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
