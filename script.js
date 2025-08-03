@@ -1039,8 +1039,8 @@ class MusicPlayer {
         statusElement.className = `status ${type}`;
         
         setTimeout(() => {
-            statusElement.className = 'status';
-        }, 3000);
+            this.clearStatus();
+        }, 2000);
     }
 
     createStatusElement() {
