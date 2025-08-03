@@ -57,14 +57,14 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    margin-bottom: 50px;
-    padding-top: 30px;
+    margin-bottom: 15px;
+    padding-top: 10px;
     position: relative;
 }
 
 .page-header h1 {
     color: #1d1d1f;
-    font-size: 48px;
+    font-size: 36px;
     font-weight: 700;
     margin: 0;
     letter-spacing: -0.5px;
