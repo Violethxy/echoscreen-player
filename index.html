@@ -64,11 +64,11 @@
                         </div>
                         
                         <div class="translation-control">
-                            <button id="translationToggle" class="control-btn" title="切换中文翻译">
-                                <span id="translationIcon">🌐</span>
-                                <span id="translationText">显示翻译</span>
-                                <span class="status-indicator"></span>
-                            </button>
+                            <label class="ios-switch">
+                                <input type="checkbox" id="translationToggle">
+                                <span class="switch-slider"></span>
+                                <span class="switch-label">翻译</span>
+                            </label>
                         </div>
                         
                         <div class="timer-control">
@@ -102,7 +102,7 @@
             
             <div class="right-panel">
                 <div class="lyrics-container">
-                    <h3>台词文本</h3>
+                    <h3>文本</h3>
                     <div id="lyrics" class="lyrics">
                         <div class="lyric-placeholder">请上传LRC文件</div>
                     </div>
