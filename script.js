@@ -13,7 +13,7 @@ class MusicPlayer {
         this.timerActive = false;
         this.timerId = null;
         this.timerEndTime = 0;
-        this.favorites = this.loadFavoritesFromStorage();
+        this.favorites = [];
         
         this.initializeElements();
         this.bindEvents();
@@ -52,8 +52,7 @@ class MusicPlayer {
             
             // 翻译控制
             this.translationToggle = document.getElementById('translationToggle');
-            this.translationIcon = document.getElementById('translationIcon');
-            this.translationText = document.getElementById('translationText');
+            this.translationText = document.querySelector('.switch-label');
             
             // 定时器控制
             this.timerBtn = document.getElementById('timerBtn');
@@ -115,7 +114,7 @@ class MusicPlayer {
             
             // 翻译切换事件
             if (this.translationToggle) {
-                this.translationToggle.addEventListener('click', () => this.toggleTranslation());
+                this.translationToggle.addEventListener('change', () => this.toggleTranslation());
             }
             
             // 定时器事件
@@ -182,6 +181,12 @@ class MusicPlayer {
 
         console.log('开始处理文件夹上传，文件数量:', files.length);
         console.log('文件列表:', files.map(f => f.webkitRelativePath));
+        console.log('文件详细信息:', files.map(f => ({
+            name: f.name,
+            webkitRelativePath: f.webkitRelativePath,
+            size: f.size,
+            type: f.type
+        })));
         this.updateStatus('正在处理文件夹...', 'success');
         
         try {
@@ -213,18 +218,62 @@ class MusicPlayer {
     groupFilesByFolder(files) {
         const folderGroups = {};
         
+        // 分析文件路径结构，确定是哪种情况
+        const samplePath = files[0]?.webkitRelativePath;
+        console.log('样本文件路径:', samplePath);
+        
+        if (!samplePath) {
+            console.log('没有文件路径信息');
+            return folderGroups;
+        }
+        
+        const pathParts = samplePath.split('/');
+        console.log('样本路径分割:', pathParts);
+        console.log('样本路径长度:', pathParts.length);
+        
+        // 判断上传类型
+        let isDirectSubfolder = false;
+        if (pathParts.length === 2) {
+            // 情况2：直接上传子文件夹 (子文件夹名/文件名)
+            isDirectSubfolder = true;
+            console.log('检测到：直接上传子文件夹');
+        } else if (pathParts.length >= 3) {
+            // 情况1：上传包含多个子文件夹的文件夹 (根文件夹/子文件夹/文件名)
+            isDirectSubfolder = false;
+            console.log('检测到：上传包含多个子文件夹的文件夹');
+        } else {
+            console.log('未知的文件路径结构');
+            return folderGroups;
+        }
+        
         for (const file of files) {
-            console.log('文件路径:', file.webkitRelativePath);
+            console.log('处理文件路径:', file.webkitRelativePath);
             const pathParts = file.webkitRelativePath.split('/');
-            const folderName = pathParts[0];
+            
+            let folderName;
+            if (isDirectSubfolder) {
+                // 情况2：直接上传子文件夹，使用第一个部分作为文件夹名
+                folderName = pathParts[0];
+                console.log('直接子文件夹模式 - 文件夹名:', folderName);
+            } else {
+                // 情况1：多层级文件夹，使用第二个部分作为文件夹名
+                if (pathParts.length < 2) {
+                    console.log('跳过根目录文件:', file.webkitRelativePath);
+                    continue;
+                }
+                folderName = pathParts[1];
+                console.log('多层级文件夹模式 - 文件夹名:', folderName);
+            }
             
             if (!folderGroups[folderName]) {
                 folderGroups[folderName] = [];
             }
             
             folderGroups[folderName].push(file);
+            console.log(`文件 ${file.name} 已添加到文件夹 ${folderName}`);
         }
         
+        console.log('最终文件夹分组:', Object.keys(folderGroups));
         return folderGroups;
     }
 
@@ -238,6 +287,7 @@ class MusicPlayer {
         for (const file of files) {
             const fileName = file.name.toLowerCase();
             console.log(`检查文件: ${fileName}`);
+            console.log(`文件完整路径: ${file.webkitRelativePath}`);
             
             if (this.isAudioFile(fileName)) {
                 audioFile = file;
@@ -245,6 +295,8 @@ class MusicPlayer {
             } else if (this.isLrcFile(fileName)) {
                 lrcFile = file;
                 console.log(`找到歌词文件: ${fileName}`);
+            } else {
+                console.log(`跳过非音频/歌词文件: ${fileName}`);
             }
         }
         
@@ -263,6 +315,28 @@ class MusicPlayer {
             lyrics: []
         };
         
+        // 预加载音频时长
+        try {
+            console.log(`预加载音频时长: ${audioFile.name}`);
+            const audioUrl = URL.createObjectURL(audioFile);
+            const tempAudio = new Audio();
+            tempAudio.src = audioUrl;
+            
+            await new Promise((resolve, reject) => {
+                tempAudio.addEventListener('loadedmetadata', () => {
+                    song.duration = tempAudio.duration;
+                    console.log(`音频时长加载完成: ${song.duration}秒`);
+                    resolve();
+                }, { once: true });
+                tempAudio.addEventListener('error', reject, { once: true });
+            });
+            
+            // 清理临时音频对象
+            URL.revokeObjectURL(audioUrl);
+        } catch (error) {
+            console.warn(`预加载音频时长失败: ${error.message}`);
+        }
+        
         // 处理歌词文件
         if (lrcFile) {
             try {
@@ -276,7 +350,7 @@ class MusicPlayer {
         }
         
         this.playlist.push(song);
-        console.log(`歌曲 ${folderName} 已添加到播放列表`);
+        console.log(`歌曲 ${folderName} 已添加到播放列表，时长: ${song.duration}秒`);
     }
 
     isAudioFile(fileName) {
@@ -541,10 +615,12 @@ class MusicPlayer {
                 item.classList.add('active');
             }
             
+            const durationText = this.formatTime(song.duration);
+            console.log(`显示歌曲: ${song.title}, 时长: ${song.duration}秒, 格式化: ${durationText}`);
             item.innerHTML = `
                 <div class="song-info">
                     <div class="song-title">${song.title}</div>
-                    <div class="song-duration">${this.formatTime(song.duration)}</div>
+                    <div class="song-duration">${durationText}</div>
                 </div>
             `;
             
@@ -594,7 +670,10 @@ class MusicPlayer {
                 this.audio.addEventListener('error', reject, { once: true });
             });
             
-            song.duration = this.audio.duration;
+            // 如果歌曲时长未设置，则设置它
+            if (!song.duration || song.duration === 0) {
+                song.duration = this.audio.duration;
+            }
             this.updateStatus(`已加载: ${song.title}`, 'success');
             
             // 更新循环按钮状态
@@ -823,22 +902,18 @@ class MusicPlayer {
     }
 
     toggleTranslation() {
-        this.showTranslation = !this.showTranslation;
+        this.showTranslation = this.translationToggle.checked;
         this.updateTranslationButtonState();
         this.displayLyrics(); // 重新显示歌词以应用翻译设置
         this.displayFavorites(); // 重新显示收藏以应用翻译设置
     }
 
     updateTranslationButtonState() {
-        if (this.translationToggle && this.translationIcon && this.translationText) {
-            this.translationToggle.classList.toggle('active', this.showTranslation);
-            
+        if (this.translationToggle && this.translationText) {
             if (this.showTranslation) {
-                this.translationIcon.textContent = '🌐';
-                this.translationText.textContent = '隐藏翻译';
+                this.translationText.textContent = '隐藏';
             } else {
-                this.translationIcon.textContent = '🌐';
-                this.translationText.textContent = '显示翻译';
+                this.translationText.textContent = '翻译';
             }
         }
     }
@@ -1078,9 +1153,6 @@ class MusicPlayer {
             this.updateStatus('已添加到收藏', 'success');
         }
         
-        // 保存到本地存储
-        this.saveFavoritesToStorage();
-        
         this.displayFavorites();
     }
     
@@ -1102,25 +1174,7 @@ class MusicPlayer {
     
 
     
-    saveFavoritesToStorage() {
-        try {
-            localStorage.setItem('musicPlayerFavorites', JSON.stringify(this.favorites));
-        } catch (error) {
-            console.warn('保存收藏数据失败:', error);
-        }
-    }
-    
-    loadFavoritesFromStorage() {
-        try {
-            const stored = localStorage.getItem('musicPlayerFavorites');
-            if (stored) {
-                return JSON.parse(stored);
-            }
-        } catch (error) {
-            console.warn('加载收藏数据失败:', error);
-        }
-        return [];
-    }
+
     
     clearAllFavorites() {
         if (this.favorites.length === 0) {
@@ -1130,7 +1184,6 @@ class MusicPlayer {
         
         if (confirm('确定要清空所有收藏吗？此操作不可恢复。')) {
             this.favorites = [];
-            this.saveFavoritesToStorage();
             
             this.displayFavorites();
             this.updateStatus('已清空所有收藏', 'success');
@@ -1185,7 +1238,6 @@ class MusicPlayer {
             removeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.favorites.splice(index, 1);
-                this.saveFavoritesToStorage(); // 保存到本地存储
                 
                 this.displayFavorites();
                 this.updateStatus('已删除收藏', 'success');
