@@ -18,6 +18,8 @@ class MusicPlayer {
         this.initializeElements();
         this.bindEvents();
         this.setupAudioEvents();
+        this.loadFavoritesFromStorage();
+        this.updateFavoritesCount();
     }
 
     initializeElements() {
@@ -45,9 +47,15 @@ class MusicPlayer {
             this.lyricsContainer = document.getElementById('lyrics');
             this.playlistContainer = document.getElementById('playlist');
             this.volumePercentage = document.getElementById('volumePercentage');
+            
+            // 收藏相关元素
             this.favoritesContainer = document.getElementById('favorites');
+            this.favoritesBtn = document.getElementById('favoritesBtn');
+            this.favoritesCount = document.getElementById('favoritesCount');
+            this.favoritesModal = document.getElementById('favoritesModal');
+            this.closeFavoritesBtn = document.getElementById('closeFavoritesBtn');
             this.clearFavoritesBtn = document.getElementById('clearFavoritesBtn');
-            this.importFavoritesBtn = document.getElementById('importFavoritesBtn');
+    
             this.saveFavoritesBtn = document.getElementById('saveFavoritesBtn');
             
             // 翻译控制
@@ -122,15 +130,31 @@ class MusicPlayer {
                 this.timerBtn.addEventListener('click', () => this.toggleTimer());
             }
             
+            // 收藏按钮事件
+            if (this.favoritesBtn) {
+                this.favoritesBtn.addEventListener('click', () => this.openFavoritesModal());
+            }
+            
+            // 关闭收藏弹窗事件
+            if (this.closeFavoritesBtn) {
+                this.closeFavoritesBtn.addEventListener('click', () => this.closeFavoritesModal());
+            }
+            
+            // 点击弹窗背景关闭
+            if (this.favoritesModal) {
+                this.favoritesModal.addEventListener('click', (e) => {
+                    if (e.target === this.favoritesModal) {
+                        this.closeFavoritesModal();
+                    }
+                });
+            }
+            
             // 清空收藏事件
             if (this.clearFavoritesBtn) {
                 this.clearFavoritesBtn.addEventListener('click', () => this.clearAllFavorites());
             }
             
-            // 导入收藏事件
-            if (this.importFavoritesBtn) {
-                this.importFavoritesBtn.addEventListener('click', () => this.importFavoritesFromFile());
-            }
+
             
             // 保存收藏事件
             if (this.saveFavoritesBtn) {
@@ -190,6 +214,13 @@ class MusicPlayer {
         this.updateStatus('正在处理文件夹...', 'success');
         
         try {
+            // 检测macOS系统并给出提示
+            const isMacOS = navigator.platform.includes('Mac');
+            if (isMacOS) {
+                console.log('检测到macOS系统，正在处理多层文件夹结构...');
+                this.updateStatus('macOS系统：正在处理多层文件夹结构...', 'success');
+            }
+            
             // 按文件夹分组文件
             const folderGroups = this.groupFilesByFolder(files);
             console.log('文件夹分组结果:', Object.keys(folderGroups));
@@ -231,6 +262,10 @@ class MusicPlayer {
         console.log('样本路径分割:', pathParts);
         console.log('样本路径长度:', pathParts.length);
         
+        // 检测macOS系统
+        const isMacOS = navigator.platform.includes('Mac');
+        console.log('检测到macOS:', isMacOS);
+        
         // 判断上传类型
         let isDirectSubfolder = false;
         if (pathParts.length === 2) {
@@ -251,18 +286,37 @@ class MusicPlayer {
             const pathParts = file.webkitRelativePath.split('/');
             
             let folderName;
-            if (isDirectSubfolder) {
-                // 情况2：直接上传子文件夹，使用第一个部分作为文件夹名
-                folderName = pathParts[0];
-                console.log('直接子文件夹模式 - 文件夹名:', folderName);
-            } else {
-                // 情况1：多层级文件夹，使用第二个部分作为文件夹名
-                if (pathParts.length < 2) {
-                    console.log('跳过根目录文件:', file.webkitRelativePath);
-                    continue;
+            
+            // macOS特殊处理：更好地处理多层文件夹结构
+            if (isMacOS) {
+                if (pathParts.length === 2) {
+                    // 情况：子文件夹/文件名
+                    folderName = pathParts[0];
+                    console.log('macOS单层文件夹模式 - 文件夹名:', folderName);
+                } else if (pathParts.length >= 3) {
+                    // 情况：根文件夹/子文件夹/文件名
+                    folderName = pathParts[1];
+                    console.log('macOS多层文件夹模式 - 文件夹名:', folderName);
+                } else {
+                    // 情况：只有文件名，没有文件夹结构
+                    folderName = '默认文件夹';
+                    console.log('macOS无文件夹结构 - 使用默认文件夹名');
                 }
-                folderName = pathParts[1];
-                console.log('多层级文件夹模式 - 文件夹名:', folderName);
+            } else {
+                // Windows和其他系统的处理
+                if (isDirectSubfolder) {
+                    // 情况2：直接上传子文件夹，使用第一个部分作为文件夹名
+                    folderName = pathParts[0];
+                    console.log('直接子文件夹模式 - 文件夹名:', folderName);
+                } else {
+                    // 情况1：多层级文件夹，使用第二个部分作为文件夹名
+                    if (pathParts.length < 2) {
+                        console.log('跳过根目录文件:', file.webkitRelativePath);
+                        continue;
+                    }
+                    folderName = pathParts[1];
+                    console.log('多层级文件夹模式 - 文件夹名:', folderName);
+                }
             }
             
             if (!folderGroups[folderName]) {
@@ -661,8 +715,8 @@ class MusicPlayer {
                     // 显示歌词
         this.displayLyrics();
         
-        // 显示收藏
-        this.displayFavorites();
+        // 更新收藏数量
+        this.updateFavoritesCount();
             
             // 等待音频加载完成
             await new Promise((resolve, reject) => {
@@ -1153,7 +1207,48 @@ class MusicPlayer {
             this.updateStatus('已添加到收藏', 'success');
         }
         
+        this.updateFavoritesCount();
+        this.saveFavoritesToStorage();
         this.displayFavorites();
+    }
+    
+    openFavoritesModal() {
+        if (this.favoritesModal) {
+            this.favoritesModal.classList.add('show');
+            this.displayFavorites();
+        }
+    }
+    
+    closeFavoritesModal() {
+        if (this.favoritesModal) {
+            this.favoritesModal.classList.remove('show');
+        }
+    }
+    
+    updateFavoritesCount() {
+        if (this.favoritesCount) {
+            this.favoritesCount.textContent = this.favorites.length;
+        }
+    }
+    
+    saveFavoritesToStorage() {
+        try {
+            localStorage.setItem('favorites', JSON.stringify(this.favorites));
+        } catch (error) {
+            console.warn('保存收藏到本地存储失败:', error);
+        }
+    }
+    
+    loadFavoritesFromStorage() {
+        try {
+            const savedFavorites = localStorage.getItem('favorites');
+            if (savedFavorites) {
+                this.favorites = JSON.parse(savedFavorites);
+                this.updateFavoritesCount();
+            }
+        } catch (error) {
+            console.warn('从本地存储加载收藏失败:', error);
+        }
     }
     
     updateSyncStatus() {
@@ -1185,6 +1280,8 @@ class MusicPlayer {
         if (confirm('确定要清空所有收藏吗？此操作不可恢复。')) {
             this.favorites = [];
             
+            this.updateFavoritesCount();
+            this.saveFavoritesToStorage();
             this.displayFavorites();
             this.updateStatus('已清空所有收藏', 'success');
         }
@@ -1239,6 +1336,8 @@ class MusicPlayer {
                 e.stopPropagation();
                 this.favorites.splice(index, 1);
                 
+                this.updateFavoritesCount();
+                this.saveFavoritesToStorage();
                 this.displayFavorites();
                 this.updateStatus('已删除收藏', 'success');
             });
@@ -1266,7 +1365,7 @@ class MusicPlayer {
             this.favorites.forEach((favorite, index) => {
                 const timeStr = this.formatTime(favorite.time);
                 content += `${index + 1}. [${timeStr}] ${favorite.songTitle}\n`;
-                content += `   歌词: ${favorite.text}\n`;
+                content += `   文本: ${favorite.text}\n`;
                 content += `   收藏时间: ${new Date(favorite.timestamp).toLocaleString()}\n`;
                 content += '\n';
             });
@@ -1296,136 +1395,7 @@ class MusicPlayer {
         }
     }
     
-    // 从txt文件读取收藏
-    loadFavoritesFromTxtFile() {
-        try {
-            // 检查是否有对应的txt文件
-            const fileName = `favorites.txt`;
-            
-            // 这里我们使用一个隐藏的文件输入来读取文件
-            const fileInput = document.createElement('input');
-            fileInput.type = 'file';
-            fileInput.accept = '.txt';
-            fileInput.style.display = 'none';
-            
-            fileInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (file && file.name === fileName) {
-                    this.parseFavoritesFromTxtFile(file);
-                }
-            });
-            
-            // 自动触发文件选择（用户需要手动选择文件）
-            // 由于浏览器安全限制，无法自动读取文件
-            // 这里我们提供一个提示
-            this.updateStatus('如需导入收藏，请手动选择txt文件', 'success');
-            
-        } catch (error) {
-            console.error('读取收藏文件失败:', error);
-        }
-    }
-    
-    // 解析txt文件中的收藏
-    parseFavoritesFromTxtFile(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const content = e.target.result;
-                const lines = content.split('\n');
-                const importedFavorites = [];
-                
-                let currentFavorite = null;
-                
-                for (const line of lines) {
-                    const trimmedLine = line.trim();
-                    
-                    // 匹配收藏项格式: "1. [00:30] 歌曲名"
-                    const match = trimmedLine.match(/^\d+\.\s+\[(\d{2}:\d{2})\]\s+(.+)$/);
-                    if (match) {
-                        if (currentFavorite) {
-                            importedFavorites.push(currentFavorite);
-                        }
-                        
-                        const timeStr = match[1];
-                        const songTitle = match[2];
-                        const time = this.parseTimeString(timeStr);
-                        
-                        currentFavorite = {
-                            time: time,
-                            songTitle: songTitle,
-                            text: '',
-                            timestamp: Date.now()
-                        };
-                    } else if (currentFavorite && trimmedLine.startsWith('   歌词:')) {
-                        currentFavorite.text = trimmedLine.replace('   歌词:', '').trim();
-                    }
-                }
-                
-                if (currentFavorite) {
-                    importedFavorites.push(currentFavorite);
-                }
-                
-                if (importedFavorites.length > 0) {
-                    // 合并导入的收藏
-                    const existingFavorites = [...this.favorites];
-                    
-                    importedFavorites.forEach(importedFav => {
-                        const exists = existingFavorites.find(fav => 
-                            fav.text === importedFav.text && 
-                            fav.time === importedFav.time &&
-                            fav.songTitle === importedFav.songTitle
-                        );
-                        
-                        if (!exists) {
-                            existingFavorites.push(importedFav);
-                        }
-                    });
-                    
-                    this.favorites = existingFavorites;
-                    this.saveFavoritesToStorage();
-                    this.displayFavorites();
-                    
-                    this.updateStatus(`成功导入 ${importedFavorites.length} 个收藏`, 'success');
-                }
-                
-            } catch (error) {
-                console.error('解析收藏文件失败:', error);
-                this.updateStatus('解析收藏文件失败', 'error');
-            }
-        };
-        
-        reader.readAsText(file, 'utf-8');
-    }
-    
-    // 解析时间字符串为秒数
-    parseTimeString(timeStr) {
-        const parts = timeStr.split(':');
-        if (parts.length === 2) {
-            const minutes = parseInt(parts[0]);
-            const seconds = parseInt(parts[1]);
-            return minutes * 60 + seconds;
-        }
-        return 0;
-    }
-    
-    // 导入收藏文件
-    importFavoritesFromFile() {
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = '.txt';
-        fileInput.style.display = 'none';
-        
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                this.parseFavoritesFromTxtFile(file);
-            }
-        });
-        
-        document.body.appendChild(fileInput);
-        fileInput.click();
-        document.body.removeChild(fileInput);
-    }
+
 }
 
 function initializePlayer() {
