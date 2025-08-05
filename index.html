@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EchoScreen Player</title>
-    <link rel="stylesheet" href="/echoscreen-player/style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="page-header">
@@ -102,23 +102,35 @@
             
             <div class="right-panel">
                 <div class="lyrics-container">
-                    <h3>文本</h3>
+                    <div class="lyrics-header">
+                        <h3>文本</h3>
+                        <button id="favoritesBtn" class="favorites-btn" title="查看收藏夹">
+                            <span class="favorites-icon">⭐</span>
+                            <span class="favorites-count" id="favoritesCount">0</span>
+                        </button>
+                    </div>
                     <div id="lyrics" class="lyrics">
                         <div class="lyric-placeholder">请上传LRC文件</div>
                     </div>
                 </div>
-                <div class="favorites-container">
-                    <div class="favorites-header">
-                        <h3>收藏夹</h3>
-                        <div class="favorites-controls">
-                            <button id="importFavoritesBtn" class="import-favorites-btn" title="导入收藏">📁</button>
-                            <button id="saveFavoritesBtn" class="save-favorites-btn" title="保存为TXT">💾</button>
-                            <button id="clearFavoritesBtn" class="clear-favorites-btn" title="清空所有收藏">🗑️</button>
-                        </div>
-                    </div>
-                    <div id="favorites" class="favorites">
-                        <div class="favorites-placeholder">暂无收藏</div>
-                    </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 收藏夹弹窗 -->
+    <div id="favoritesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>收藏夹</h2>
+                <div class="header-controls">
+                    <button id="saveFavoritesBtn" class="save-favorites-btn" title="保存为TXT">💾</button>
+                    <button id="clearFavoritesBtn" class="clear-favorites-btn" title="清空所有收藏">🗑️</button>
+                    <button id="closeFavoritesBtn" class="close-btn">×</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div id="favorites" class="favorites">
+                    <div class="favorites-placeholder">暂无收藏</div>
                 </div>
             </div>
         </div>
