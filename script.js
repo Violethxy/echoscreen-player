@@ -6,7 +6,7 @@ class MusicPlayer {
         this.isLooping = false;
         this.loopStartTime = 0;
         this.loopEndTime = 0;
-        this.playlist = [];
+        this.playlist = []; // 当前播放列表（指向localPlaylist或serverPlaylist）
         this.currentPlaylistIndex = -1;
         this.showTranslation = false;
         this.isSeeking = false;
@@ -14,12 +14,32 @@ class MusicPlayer {
         this.timerId = null;
         this.timerEndTime = 0;
         this.favorites = [];
+        this.currentServerUrl = null; // 保存当前服务器URL
+        this.currentSelectionState = null; // 保存当前选择状态
+        
+        // 播放列表管理
+        this.currentPlaylistType = 'local'; // 当前播放列表类型：'local' 或 'server'
+        this.localPlaylist = []; // 本地播放列表
+        this.serverPlaylist = []; // 服务器播放列表
+        this.playlist = this.localPlaylist; // 初始化当前播放列表指向本地播放列表
+        
+        // 从配置文件读取设置
+        this.config = typeof CONFIG !== 'undefined' ? CONFIG : {
+            server: { url: 'http://154.64.252.167:4000/playercloudapi', autoLoad: true },
+            player: { defaultVolume: 100, defaultSpeed: 1, autoPlay: false, showTranslation: false },
+            ui: { showServerInput: false, showLoadServerBtn: false }
+        };
         
         this.initializeElements();
         this.bindEvents();
         this.setupAudioEvents();
         this.loadFavoritesFromStorage();
         this.updateFavoritesCount();
+        
+        // 移除自动加载，改为点击服务器标签页时加载
+        // if (this.config.server.autoLoad && this.config.server.url) {
+        //     this.autoLoadServerFiles();
+        // }
     }
 
     initializeElements() {
@@ -28,25 +48,46 @@ class MusicPlayer {
             this.folderInput = document.getElementById('folderInput');
             console.log('文件夹输入元素:', this.folderInput);
             
-            // 播放控制
-            this.playPauseBtn = document.getElementById('playPauseBtn');
-            this.prevBtn = document.getElementById('prevBtn');
-            this.nextBtn = document.getElementById('nextBtn');
-            this.loopBtn = document.getElementById('loopBtn');
+            // 服务器文件加载
+            this.serverInput = document.getElementById('serverInput');
+            this.loadServerBtn = document.getElementById('loadServerBtn');
+            console.log('服务器输入元素:', this.serverInput);
+            console.log('服务器加载按钮:', this.loadServerBtn);
+            
+            // 播放控制（已移到底部栏）
+            this.playPauseBtn = null;
+            this.prevBtn = null;
+            this.nextBtn = null;
+            this.loopBtn = null;
             
             // 进度和音量
             this.progressSlider = document.getElementById('progressSlider');
             this.progressFill = document.getElementById('progressFill');
-            this.volumeSlider = document.getElementById('volumeSlider');
-            this.speedSelect = document.getElementById('speedSelect');
+            this.volumeSlider = null; // 已删除
+            this.speedSelect = null; // 已移到底部栏
             
-            // 显示信息
-            this.songTitle = document.getElementById('songTitle');
-            this.currentTimeSpan = document.getElementById('currentTime');
-            this.totalTimeSpan = document.getElementById('totalTime');
+            // 显示信息（这些元素已移除，设为null）
+            this.songTitle = null;
+            this.currentTimeSpan = null;
+            this.totalTimeSpan = null;
+            
+            // 底部播放栏元素
+            this.bottomSongTitle = document.getElementById('bottomSongTitle');
+            this.bottomCurrentTimeSpan = document.getElementById('bottomCurrentTime');
+            this.bottomTotalTimeSpan = document.getElementById('bottomTotalTime');
+            this.bottomProgressSlider = document.getElementById('bottomProgressSlider');
+            this.bottomProgressFill = document.getElementById('bottomProgressFill');
+            
+            // 底部播放控制按钮
+            this.bottomPlayPauseBtn = document.getElementById('bottomPlayPauseBtn');
+            this.bottomPrevBtn = document.getElementById('bottomPrevBtn');
+            this.bottomNextBtn = document.getElementById('bottomNextBtn');
+            this.bottomLoopBtn = document.getElementById('bottomLoopBtn');
+            this.bottomSpeedSelect = document.getElementById('bottomSpeedSelect');
             this.lyricsContainer = document.getElementById('lyrics');
-            this.playlistContainer = document.getElementById('playlist');
-            this.volumePercentage = document.getElementById('volumePercentage');
+            this.localPlaylistContainer = document.getElementById('localPlaylist');
+            this.serverPlaylistContainer = document.getElementById('serverPlaylist');
+            this.volumePercentage = null; // 已删除
             
             // 收藏相关元素
             this.favoritesContainer = document.getElementById('favorites');
@@ -57,6 +98,10 @@ class MusicPlayer {
             this.clearFavoritesBtn = document.getElementById('clearFavoritesBtn');
     
             this.saveFavoritesBtn = document.getElementById('saveFavoritesBtn');
+            
+            // 播放列表切换按钮
+            this.localPlaylistTab = document.getElementById('localPlaylistTab');
+            this.serverPlaylistTab = document.getElementById('serverPlaylistTab');
             
             // 翻译控制
             this.translationToggle = document.getElementById('translationToggle');
@@ -89,36 +134,53 @@ class MusicPlayer {
                 console.error('文件夹输入元素未找到');
             }
             
-            // 播放控制事件
-            if (this.playPauseBtn) {
-                this.playPauseBtn.addEventListener('click', () => this.togglePlayPause());
-            }
-            if (this.prevBtn) {
-                this.prevBtn.addEventListener('click', () => this.previous());
-            }
-            if (this.nextBtn) {
-                this.nextBtn.addEventListener('click', () => this.next());
-            }
-            if (this.loopBtn) {
-                this.loopBtn.addEventListener('click', () => this.toggleLoop());
+            // 服务器文件加载事件
+            if (this.loadServerBtn) {
+                this.loadServerBtn.addEventListener('click', () => this.loadSongFromServer());
             }
             
-            // 进度控制
-            if (this.progressSlider) {
-                this.progressSlider.addEventListener('input', (e) => {
+            // 播放控制事件（已移到底部栏）
+            
+            // 底部播放控制事件
+            if (this.bottomPlayPauseBtn) {
+                this.bottomPlayPauseBtn.addEventListener('click', () => this.togglePlayPause());
+            }
+            if (this.bottomPrevBtn) {
+                this.bottomPrevBtn.addEventListener('click', () => this.previous());
+            }
+            if (this.bottomNextBtn) {
+                this.bottomNextBtn.addEventListener('click', () => this.next());
+            }
+            if (this.bottomLoopBtn) {
+                this.bottomLoopBtn.addEventListener('click', () => this.toggleLoop());
+            }
+            if (this.bottomSpeedSelect) {
+                this.bottomSpeedSelect.addEventListener('change', (e) => this.setPlaybackRate(e.target.value));
+            }
+            
+            // 进度控制（这些元素已移除，跳过事件绑定）
+            // if (this.progressSlider) {
+            //     this.progressSlider.addEventListener('input', (e) => {
+            //         this.isSeeking = true;
+            //         this.seekToTime(parseFloat(e.target.value));
+            //     });
+            //     this.progressSlider.addEventListener('change', (e) => {
+            //         this.isSeeking = false;
+            //     });
+            // }
+            
+            // 底部进度条控制
+            if (this.bottomProgressSlider) {
+                this.bottomProgressSlider.addEventListener('input', (e) => {
                     this.isSeeking = true;
                     this.seekToTime(parseFloat(e.target.value));
                 });
-                this.progressSlider.addEventListener('change', (e) => {
+                this.bottomProgressSlider.addEventListener('change', (e) => {
                     this.isSeeking = false;
                 });
             }
-            if (this.volumeSlider) {
-                this.volumeSlider.addEventListener('input', (e) => this.setVolume(e.target.value));
-            }
-            if (this.speedSelect) {
-                this.speedSelect.addEventListener('change', (e) => this.setPlaybackRate(e.target.value));
-            }
+            // 音量控制已删除
+            // 倍速控制已移到底部栏
             
             // 翻译切换事件
             if (this.translationToggle) {
@@ -161,6 +223,20 @@ class MusicPlayer {
                 this.saveFavoritesBtn.addEventListener('click', () => this.saveFavoritesToTxtFile());
             }
             
+            // 播放列表切换事件
+            if (this.localPlaylistTab) {
+                this.localPlaylistTab.addEventListener('click', () => this.switchPlaylist('local'));
+            }
+            if (this.serverPlaylistTab) {
+                this.serverPlaylistTab.addEventListener('click', () => {
+                    this.switchPlaylist('server');
+                    // 如果服务器播放列表为空，则加载服务器文件
+                    if (this.serverPlaylist.length === 0) {
+                        this.autoLoadServerFiles();
+                    }
+                });
+            }
+            
             console.log('事件绑定成功');
         } catch (error) {
             console.error('事件绑定失败:', error);
@@ -169,8 +245,20 @@ class MusicPlayer {
 
     setupAudioEvents() {
         this.audio.addEventListener('loadedmetadata', () => {
-            this.totalTimeSpan.textContent = this.formatTime(this.audio.duration);
-            this.progressSlider.max = this.audio.duration;
+            if (this.totalTimeSpan) {
+                this.totalTimeSpan.textContent = this.formatTime(this.audio.duration);
+            }
+            if (this.progressSlider) {
+                this.progressSlider.max = this.audio.duration;
+            }
+            
+            // 同步底部播放栏
+            if (this.bottomTotalTimeSpan) {
+                this.bottomTotalTimeSpan.textContent = this.formatTime(this.audio.duration);
+            }
+            if (this.bottomProgressSlider) {
+                this.bottomProgressSlider.max = this.audio.duration;
+            }
         });
 
         this.audio.addEventListener('timeupdate', () => {
@@ -186,13 +274,17 @@ class MusicPlayer {
         });
 
         this.audio.addEventListener('play', () => {
-            this.playPauseBtn.innerHTML = '<span class="pause-icon">⏸</span>';
-            this.playPauseBtn.classList.add('active');
+            if (this.bottomPlayPauseBtn) {
+                this.bottomPlayPauseBtn.innerHTML = '<span class="pause-icon">⏸</span>';
+                this.bottomPlayPauseBtn.classList.add('active');
+            }
         });
 
         this.audio.addEventListener('pause', () => {
-            this.playPauseBtn.innerHTML = '<span class="play-icon">▶</span>';
-            this.playPauseBtn.classList.remove('active');
+            if (this.bottomPlayPauseBtn) {
+                this.bottomPlayPauseBtn.innerHTML = '<span class="play-icon">▶</span>';
+                this.bottomPlayPauseBtn.classList.remove('active');
+            }
         });
     }
 
@@ -231,18 +323,1065 @@ class MusicPlayer {
                 await this.processFolder(folderName, folderFiles);
             }
             
-            this.updateStatus(`成功加载 ${this.playlist.length} 首歌曲`, 'success');
-            this.displayPlaylist();
+            this.updateStatus(`成功加载 ${this.localPlaylist.length} 首歌曲到本地播放列表`, 'success');
+            
+            // 切换到本地播放列表
+            this.switchPlaylist('local');
             
             // 如果有歌曲，自动播放第一首
-            if (this.playlist.length > 0) {
+            if (this.localPlaylist.length > 0) {
                 this.currentPlaylistIndex = 0;
-                this.loadSong(this.playlist[0]);
+                this.loadSong(this.localPlaylist[0]);
             }
             
         } catch (error) {
             console.error('文件夹处理失败:', error);
             this.updateStatus('文件夹处理失败: ' + error.message, 'error');
+        }
+    }
+
+    async loadSongFromServer() {
+        // 优先使用配置文件中的服务器地址，如果没有则使用输入框的值
+        let serverUrl = this.config.server.url;
+        if (!serverUrl && this.serverInput) {
+            serverUrl = this.serverInput.value.trim();
+        }
+        
+        if (!serverUrl) {
+            this.updateStatus('未配置服务器地址', 'error');
+            return;
+        }
+
+        try {
+            this.updateStatus('正在扫描服务器目录结构...', 'success');
+            this.loadServerBtn.disabled = true;
+            this.loadServerBtn.textContent = '扫描中...';
+
+            // 保存当前服务器URL
+            this.currentServerUrl = serverUrl;
+
+            // 清空服务器播放列表
+            this.serverPlaylist = [];
+            this.currentPlaylistIndex = -1;
+
+            // 获取服务器目录结构
+            const directoryStructure = await this.getServerDirectoryStructure(serverUrl);
+            
+            if (!directoryStructure || Object.keys(directoryStructure).length === 0) {
+                this.updateStatus('服务器上没有找到文件夹', 'error');
+                return;
+            }
+
+            // 显示一级文件夹选择界面
+            this.showFolderSelection(directoryStructure, serverUrl);
+
+        } catch (error) {
+            console.error('服务器文件加载失败:', error);
+            this.updateStatus('服务器文件加载失败: ' + error.message, 'error');
+        } finally {
+            this.loadServerBtn.disabled = false;
+            this.loadServerBtn.textContent = '加载服务器文件';
+        }
+    }
+
+    async getServerDirectoryStructure(serverUrl) {
+        try {
+            console.log('开始获取服务器目录结构:', serverUrl);
+            
+            const response = await fetch(serverUrl);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                // JSON格式响应
+                const data = await response.json();
+                console.log('收到JSON响应:', data);
+                
+                if (data.success && data.shows) {
+                    // 处理shows/episodes结构
+                    const structure = {};
+                    for (const [showName, showData] of Object.entries(data.shows)) {
+                        if (showData.episodes) {
+                            structure[showName] = {
+                                type: 'show',
+                                episodes: Object.keys(showData.episodes),
+                                data: showData
+                            };
+                        }
+                    }
+                    return structure;
+                } else if (data.success && data.folders) {
+                    // 处理folders结构
+                    const structure = {};
+                    for (const [folderName, folderData] of Object.entries(data.folders)) {
+                        structure[folderName] = {
+                            type: 'folder',
+                            data: folderData
+                        };
+                    }
+                    return structure;
+                }
+            } else {
+                // HTML格式响应
+                const html = await response.text();
+                return this.parseHtmlDirectory(html, serverUrl);
+            }
+            
+            return {};
+        } catch (error) {
+            console.error('获取服务器目录结构失败:', error);
+            throw error;
+        }
+    }
+
+    parseHtmlDirectory(html, serverUrl) {
+        const structure = {};
+        const links = html.match(/href="([^"]+)"/gi);
+        
+        if (links) {
+            const folders = [];
+            
+            for (const link of links) {
+                const match = link.match(/href="([^"]+)"/);
+                if (match) {
+                    const href = match[1];
+                    if (href.endsWith('/') && href !== '../' && href !== './') {
+                        const folderName = href.replace('/', '');
+                        folders.push(folderName);
+                    }
+                }
+            }
+            
+            // 将一级文件夹添加到结构中
+            folders.forEach(folder => {
+                structure[folder] = {
+                    type: 'html_folder',
+                    url: new URL(folder + '/', serverUrl).href
+                };
+            });
+        }
+        
+        return structure;
+    }
+
+    showFolderSelection(structure, serverUrl) {
+        const container = this.currentPlaylistType === 'local' ? this.localPlaylistContainer : this.serverPlaylistContainer;
+        if (!container) return;
+        
+        // 保存当前选择状态
+        this.currentSelectionState = {
+            type: 'folder_selection',
+            structure: structure,
+            serverUrl: serverUrl
+        };
+        
+        container.innerHTML = '';
+        
+        const title = document.createElement('div');
+        title.className = 'folder-selection-title';
+        title.innerHTML = '<h3>请选择剧集：</h3>';
+        container.appendChild(title);
+        
+        Object.keys(structure).forEach(folderName => {
+            const item = document.createElement('div');
+            item.className = 'folder-item';
+            item.innerHTML = `
+                <div class="folder-info">
+                    <div class="folder-name">${folderName}</div>
+                    <div class="folder-type">${this.getFolderTypeText(structure[folderName].type)}</div>
+                </div>
+            `;
+            
+            item.addEventListener('click', () => {
+                this.handleFolderSelection(folderName, structure[folderName], serverUrl);
+            });
+            
+            container.appendChild(item);
+        });
+    }
+
+    getFolderTypeText(type) {
+        switch (type) {
+            case 'show': return '剧集';
+            case 'folder': return '文件夹';
+            case 'html_folder': return '文件夹';
+            default: return '未知';
+        }
+    }
+
+    async handleFolderSelection(folderName, folderData, serverUrl) {
+        console.log(`用户选择了文件夹: ${folderName}`);
+        
+        if (folderData.type === 'show') {
+            // 显示二级文件夹（集数）选择
+            this.showEpisodeSelection(folderName, folderData, serverUrl);
+        } else if (folderData.type === 'folder') {
+            // 直接加载文件夹中的歌曲
+            await this.loadFolderSongs(folderName, folderData, serverUrl);
+        } else if (folderData.type === 'html_folder') {
+            // 扫描HTML文件夹的子目录
+            await this.scanHtmlFolder(folderName, folderData.url);
+        }
+    }
+
+    showEpisodeSelection(showName, showData, serverUrl) {
+        const container = this.currentPlaylistType === 'local' ? this.localPlaylistContainer : this.serverPlaylistContainer;
+        if (!container) return;
+        
+        // 保存当前选择状态
+        this.currentSelectionState = {
+            type: 'episode_selection',
+            showName: showName,
+            showData: showData,
+            serverUrl: serverUrl
+        };
+        
+        container.innerHTML = '';
+        
+        const title = document.createElement('div');
+        title.className = 'episode-selection-title';
+        title.innerHTML = `<h3>${showName} - 请选择集数：</h3>`;
+        container.appendChild(title);
+        
+        // 添加返回按钮
+        const backBtn = document.createElement('div');
+        backBtn.className = 'back-button';
+        backBtn.innerHTML = '← 返回剧集列表';
+        backBtn.addEventListener('click', () => {
+            this.loadSongFromServer();
+        });
+        container.appendChild(backBtn);
+        
+
+        
+        showData.episodes.forEach(episodeName => {
+            const item = document.createElement('div');
+            item.className = 'episode-item';
+            item.innerHTML = `
+                <div class="episode-info">
+                    <div class="episode-name">${episodeName}</div>
+                </div>
+            `;
+            
+            item.addEventListener('click', () => {
+                this.loadEpisodeSongs(showName, episodeName, showData.data.episodes[episodeName], serverUrl);
+            });
+            
+            container.appendChild(item);
+        });
+    }
+
+    async loadEpisodeSongs(showName, episodeName, episodeData, serverUrl) {
+        console.log(`加载剧集: ${showName} - ${episodeName}`);
+        
+        try {
+            this.updateStatus(`正在加载 ${showName} - ${episodeName}...`, 'success');
+            
+            // 创建歌曲对象
+            const song = {
+                id: Date.now() + Math.random(),
+                title: `${showName} - ${episodeName}`,
+                audioUrl: new URL(`${showName}/${episodeName}/${episodeData.audioFiles[0]}`, serverUrl).href,
+                lrcUrl: episodeData.scriptFiles && episodeData.scriptFiles.length > 0 ? 
+                    new URL(`${showName}/${episodeName}/${episodeData.scriptFiles[0]}`, serverUrl).href : null,
+                duration: 0,
+                lyrics: []
+            };
+            
+            // 预加载音频时长
+            try {
+                const tempAudio = new Audio();
+                tempAudio.src = song.audioUrl;
+                
+                await new Promise((resolve, reject) => {
+                    tempAudio.addEventListener('loadedmetadata', () => {
+                        song.duration = tempAudio.duration;
+                        resolve();
+                    }, { once: true });
+                    tempAudio.addEventListener('error', reject, { once: true });
+                });
+            } catch (error) {
+                console.warn(`预加载音频时长失败: ${error.message}`);
+            }
+            
+            // 处理歌词文件
+            if (song.lrcUrl) {
+                try {
+                    const lrcText = await this.readServerLrcFile(song.lrcUrl);
+                    song.lyrics = this.parseLrc(lrcText);
+                } catch (error) {
+                    console.warn(`处理歌词文件失败: ${error.message}`);
+                }
+            }
+            
+            this.serverPlaylist = [song];
+            this.currentPlaylistIndex = 0;
+            
+            this.updateStatus(`已加载: ${song.title} 到服务器播放列表`, 'success');
+            
+            // 切换到服务器播放列表
+            this.switchPlaylist('server');
+            this.loadSong(song);
+            
+        } catch (error) {
+            console.error(`加载剧集失败:`, error);
+            this.updateStatus('加载剧集失败: ' + error.message, 'error');
+        }
+    }
+
+    async loadAllEpisodes(showName, showData, serverUrl) {
+        console.log(`加载所有剧集: ${showName}`);
+        
+        try {
+            this.updateStatus(`正在加载 ${showName} 的所有集数...`, 'success');
+            
+            this.serverPlaylist = [];
+            this.currentPlaylistIndex = -1;
+            
+            // 加载所有集数
+            for (const episodeName of showData.episodes) {
+                const episodeData = showData.data.episodes[episodeName];
+                
+                if (episodeData.audioFiles && episodeData.audioFiles.length > 0) {
+                    console.log(`处理剧集: ${episodeName}`);
+                    
+                    // 创建歌曲对象
+                    const song = {
+                        id: Date.now() + Math.random(),
+                        title: `${showName} - ${episodeName}`,
+                        audioUrl: new URL(`${showName}/${episodeName}/${episodeData.audioFiles[0]}`, serverUrl).href,
+                        lrcUrl: episodeData.scriptFiles && episodeData.scriptFiles.length > 0 ? 
+                            new URL(`${showName}/${episodeName}/${episodeData.scriptFiles[0]}`, serverUrl).href : null,
+                        duration: 0,
+                        lyrics: []
+                    };
+                    
+                    // 预加载音频时长
+                    try {
+                        const tempAudio = new Audio();
+                        tempAudio.src = song.audioUrl;
+                        
+                        await new Promise((resolve, reject) => {
+                            tempAudio.addEventListener('loadedmetadata', () => {
+                                song.duration = tempAudio.duration;
+                                resolve();
+                            }, { once: true });
+                            tempAudio.addEventListener('error', reject, { once: true });
+                        });
+                    } catch (error) {
+                        console.warn(`预加载音频时长失败: ${error.message}`);
+                    }
+                    
+                    // 处理歌词文件
+                    if (song.lrcUrl) {
+                        try {
+                            const lrcText = await this.readServerLrcFile(song.lrcUrl);
+                            song.lyrics = this.parseLrc(lrcText);
+                        } catch (error) {
+                            console.warn(`处理歌词文件失败: ${error.message}`);
+                        }
+                    }
+                    
+                    this.serverPlaylist.push(song);
+                    console.log(`已添加剧集到服务器播放列表: ${episodeName}`);
+                }
+            }
+            
+            if (this.serverPlaylist.length > 0) {
+                this.currentPlaylistIndex = 0;
+                this.updateStatus(`已加载 ${this.serverPlaylist.length} 集 ${showName} 到服务器播放列表`, 'success');
+                
+                // 切换到服务器播放列表
+                this.switchPlaylist('server');
+                this.loadSong(this.serverPlaylist[0]);
+            } else {
+                this.updateStatus('没有找到可播放的剧集', 'error');
+            }
+            
+        } catch (error) {
+            console.error(`加载所有剧集失败:`, error);
+            this.updateStatus('加载所有剧集失败: ' + error.message, 'error');
+        }
+    }
+
+    async loadFolderSongs(folderName, folderData, serverUrl) {
+        console.log(`加载文件夹: ${folderName}`);
+        
+        try {
+            this.updateStatus(`正在加载 ${folderName}...`, 'success');
+            
+            this.serverPlaylist = [];
+            this.currentPlaylistIndex = -1;
+            
+            // 加载文件夹中的所有音频文件
+            if (folderData.data.audioFiles && folderData.data.audioFiles.length > 0) {
+                for (let i = 0; i < folderData.data.audioFiles.length; i++) {
+                    const audioFile = folderData.data.audioFiles[i];
+                    const scriptFile = folderData.data.scriptFiles && folderData.data.scriptFiles.length > i ? 
+                        folderData.data.scriptFiles[i] : null;
+                    
+                    const song = {
+                        id: Date.now() + Math.random() + i,
+                        title: `${folderName} - ${audioFile}`,
+                        audioUrl: new URL(`${folderName}/${audioFile}`, serverUrl).href,
+                        lrcUrl: scriptFile ? new URL(`${folderName}/${scriptFile}`, serverUrl).href : null,
+                        duration: 0,
+                        lyrics: []
+                    };
+                    
+                    // 预加载音频时长
+                    try {
+                        const tempAudio = new Audio();
+                        tempAudio.src = song.audioUrl;
+                        
+                        await new Promise((resolve, reject) => {
+                            tempAudio.addEventListener('loadedmetadata', () => {
+                                song.duration = tempAudio.duration;
+                                resolve();
+                            }, { once: true });
+                            tempAudio.addEventListener('error', reject, { once: true });
+                        });
+                    } catch (error) {
+                        console.warn(`预加载音频时长失败: ${error.message}`);
+                    }
+                    
+                    // 处理歌词文件
+                    if (song.lrcUrl) {
+                        try {
+                            const lrcText = await this.readServerLrcFile(song.lrcUrl);
+                            song.lyrics = this.parseLrc(lrcText);
+                        } catch (error) {
+                            console.warn(`处理歌词文件失败: ${error.message}`);
+                        }
+                    }
+                    
+                    this.serverPlaylist.push(song);
+                    console.log(`已添加歌曲到服务器播放列表: ${song.title}`);
+                }
+            }
+            
+            if (this.serverPlaylist.length > 0) {
+                this.currentPlaylistIndex = 0;
+                this.updateStatus(`已加载 ${this.serverPlaylist.length} 首歌曲到服务器播放列表`, 'success');
+                
+                // 切换到服务器播放列表
+                this.switchPlaylist('server');
+                this.loadSong(this.serverPlaylist[0]);
+            } else {
+                this.updateStatus('文件夹中没有找到音频文件', 'error');
+            }
+            
+        } catch (error) {
+            console.error(`加载文件夹失败:`, error);
+            this.updateStatus('加载文件夹失败: ' + error.message, 'error');
+        }
+    }
+
+    async scanHtmlFolder(folderName, folderUrl) {
+        console.log(`扫描HTML文件夹: ${folderName}`);
+        
+        try {
+            this.updateStatus(`正在扫描 ${folderName}...`, 'success');
+            
+            const response = await fetch(folderUrl);
+            if (!response.ok) {
+                throw new Error(`无法访问文件夹: ${response.status}`);
+            }
+            
+            const html = await response.text();
+            const links = html.match(/href="([^"]+)"/gi);
+            
+            if (links) {
+                const subFolders = [];
+                const files = [];
+                
+                for (const link of links) {
+                    const match = link.match(/href="([^"]+)"/);
+                    if (match) {
+                        const href = match[1];
+                        if (href.endsWith('/') && href !== '../' && href !== './') {
+                            subFolders.push(href.replace('/', ''));
+                        } else {
+                            const fileType = this.getFileType(href);
+                            if (fileType === 'audio' || fileType === 'lrc') {
+                                files.push(href);
+                            }
+                        }
+                    }
+                }
+                
+                if (subFolders.length > 0) {
+                    // 显示子文件夹选择
+                    this.showSubFolderSelection(folderName, subFolders, folderUrl);
+                } else if (files.some(f => this.getFileType(f) === 'audio')) {
+                    // 直接加载歌曲
+                    await this.loadHtmlFolderSongs(folderName, files, folderUrl);
+                }
+            }
+            
+        } catch (error) {
+            console.error(`扫描HTML文件夹失败:`, error);
+            this.updateStatus('扫描文件夹失败: ' + error.message, 'error');
+        }
+    }
+
+    showSubFolderSelection(parentFolder, subFolders, parentUrl) {
+        if (!this.playlistContainer) return;
+        
+        this.playlistContainer.innerHTML = '';
+        
+        const title = document.createElement('div');
+        title.className = 'subfolder-selection-title';
+        title.innerHTML = `<h3>${parentFolder} - 请选择集数：</h3>`;
+        this.playlistContainer.appendChild(title);
+        
+        // 添加返回按钮
+        const backBtn = document.createElement('div');
+        backBtn.className = 'back-button';
+        backBtn.innerHTML = '← 返回上级';
+        backBtn.addEventListener('click', () => {
+            this.loadSongFromServer();
+        });
+        this.playlistContainer.appendChild(backBtn);
+        
+
+        
+        subFolders.forEach(subFolder => {
+            const item = document.createElement('div');
+            item.className = 'subfolder-item';
+            item.innerHTML = `
+                <div class="subfolder-info">
+                    <div class="subfolder-name">${subFolder}</div>
+                </div>
+            `;
+            
+            item.addEventListener('click', () => {
+                const subFolderUrl = new URL(subFolder + '/', parentUrl).href;
+                this.scanHtmlFolder(subFolder, subFolderUrl);
+            });
+            
+            this.playlistContainer.appendChild(item);
+        });
+    }
+
+    async loadHtmlFolderSongs(folderName, files, folderUrl) {
+        console.log(`加载HTML文件夹歌曲: ${folderName}`);
+        
+        try {
+            this.updateStatus(`正在加载 ${folderName}...`, 'success');
+            
+            const audioFiles = files.filter(f => this.getFileType(f) === 'audio');
+            const lrcFiles = files.filter(f => this.getFileType(f) === 'lrc');
+            
+            if (audioFiles.length === 0) {
+                this.updateStatus('没有找到音频文件', 'error');
+                return;
+            }
+            
+            const song = {
+                id: Date.now() + Math.random(),
+                title: folderName,
+                audioUrl: new URL(audioFiles[0], folderUrl).href,
+                lrcUrl: lrcFiles.length > 0 ? new URL(lrcFiles[0], folderUrl).href : null,
+                duration: 0,
+                lyrics: []
+            };
+            
+            // 预加载音频时长
+            try {
+                const tempAudio = new Audio();
+                tempAudio.src = song.audioUrl;
+                
+                await new Promise((resolve, reject) => {
+                    tempAudio.addEventListener('loadedmetadata', () => {
+                        song.duration = tempAudio.duration;
+                        resolve();
+                    }, { once: true });
+                    tempAudio.addEventListener('error', reject, { once: true });
+                });
+            } catch (error) {
+                console.warn(`预加载音频时长失败: ${error.message}`);
+            }
+            
+            // 处理歌词文件
+            if (song.lrcUrl) {
+                try {
+                    const lrcText = await this.readServerLrcFile(song.lrcUrl);
+                    song.lyrics = this.parseLrc(lrcText);
+                } catch (error) {
+                    console.warn(`处理歌词文件失败: ${error.message}`);
+                }
+            }
+            
+            this.serverPlaylist = [song];
+            this.currentPlaylistIndex = 0;
+            
+            this.updateStatus(`已加载: ${song.title} 到服务器播放列表`, 'success');
+            
+            // 切换到服务器播放列表
+            this.switchPlaylist('server');
+            this.loadSong(song);
+            
+        } catch (error) {
+            console.error(`加载HTML文件夹歌曲失败:`, error);
+            this.updateStatus('加载歌曲失败: ' + error.message, 'error');
+        }
+    }
+
+    async loadAllHtmlEpisodes(parentFolder, subFolders, parentUrl) {
+        console.log(`加载所有HTML剧集: ${parentFolder}`);
+        
+        try {
+            this.updateStatus(`正在加载 ${parentFolder} 的所有集数...`, 'success');
+            
+            this.serverPlaylist = [];
+            this.currentPlaylistIndex = -1;
+            
+            // 加载所有子文件夹
+            for (const subFolder of subFolders) {
+                console.log(`处理子文件夹: ${subFolder}`);
+                
+                const subFolderUrl = new URL(subFolder + '/', parentUrl).href;
+                
+                try {
+                    const response = await fetch(subFolderUrl);
+                    if (!response.ok) {
+                        console.warn(`无法访问子文件夹: ${subFolder}`);
+                        continue;
+                    }
+                    
+                    const html = await response.text();
+                    const links = html.match(/href="([^"]+)"/gi);
+                    
+                    if (links) {
+                        const files = [];
+                        
+                        for (const link of links) {
+                            const match = link.match(/href="([^"]+)"/);
+                            if (match) {
+                                const href = match[1];
+                                if (!href.endsWith('/') && href !== '../' && href !== './') {
+                                    const fileType = this.getFileType(href);
+                                    if (fileType === 'audio' || fileType === 'lrc') {
+                                        files.push(href);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        const audioFiles = files.filter(f => this.getFileType(f) === 'audio');
+                        const lrcFiles = files.filter(f => this.getFileType(f) === 'lrc');
+                        
+                        if (audioFiles.length > 0) {
+                            const song = {
+                                id: Date.now() + Math.random(),
+                                title: `${parentFolder} - ${subFolder}`,
+                                audioUrl: new URL(audioFiles[0], subFolderUrl).href,
+                                lrcUrl: lrcFiles.length > 0 ? new URL(lrcFiles[0], subFolderUrl).href : null,
+                                duration: 0,
+                                lyrics: []
+                            };
+                            
+                            // 预加载音频时长
+                            try {
+                                const tempAudio = new Audio();
+                                tempAudio.src = song.audioUrl;
+                                
+                                await new Promise((resolve, reject) => {
+                                    tempAudio.addEventListener('loadedmetadata', () => {
+                                        song.duration = tempAudio.duration;
+                                        resolve();
+                                    }, { once: true });
+                                    tempAudio.addEventListener('error', reject, { once: true });
+                                });
+                            } catch (error) {
+                                console.warn(`预加载音频时长失败: ${error.message}`);
+                            }
+                            
+                            // 处理歌词文件
+                            if (song.lrcUrl) {
+                                try {
+                                    const lrcText = await this.readServerLrcFile(song.lrcUrl);
+                                    song.lyrics = this.parseLrc(lrcText);
+                                } catch (error) {
+                                    console.warn(`处理歌词文件失败: ${error.message}`);
+                                }
+                            }
+                            
+                            this.serverPlaylist.push(song);
+                            console.log(`已添加剧集到服务器播放列表: ${subFolder}`);
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`处理子文件夹失败: ${subFolder}`, error);
+                }
+            }
+            
+            if (this.serverPlaylist.length > 0) {
+                this.currentPlaylistIndex = 0;
+                this.updateStatus(`已加载 ${this.serverPlaylist.length} 集 ${parentFolder} 到服务器播放列表`, 'success');
+                
+                // 切换到服务器播放列表
+                this.switchPlaylist('server');
+                this.loadSong(this.serverPlaylist[0]);
+            } else {
+                this.updateStatus('没有找到可播放的剧集', 'error');
+            }
+            
+        } catch (error) {
+            console.error(`加载所有HTML剧集失败:`, error);
+            this.updateStatus('加载所有剧集失败: ' + error.message, 'error');
+        }
+    }
+
+    restoreSelectionState() {
+        if (!this.currentSelectionState) {
+            this.loadSongFromServer();
+            return;
+        }
+        
+        console.log('恢复选择状态:', this.currentSelectionState.type);
+        
+        if (this.currentSelectionState.type === 'folder_selection') {
+            // 恢复到文件夹选择界面
+            this.showFolderSelection(
+                this.currentSelectionState.structure, 
+                this.currentSelectionState.serverUrl
+            );
+        } else if (this.currentSelectionState.type === 'episode_selection') {
+            // 恢复到集数选择界面
+            this.showEpisodeSelection(
+                this.currentSelectionState.showName,
+                this.currentSelectionState.showData,
+                this.currentSelectionState.serverUrl
+            );
+        } else {
+            // 如果没有有效的选择状态，重新加载服务器
+            this.loadSongFromServer();
+        }
+    }
+
+    async getServerFileList(serverUrl) {
+        try {
+            // 直接使用用户提供的完整路径
+            console.log('正在访问服务器API:', serverUrl);
+            return await this.scanServerDirectory(serverUrl);
+            
+        } catch (error) {
+            console.error('获取服务器文件列表失败:', error);
+            throw new Error('无法访问服务器API，请检查服务器地址和权限');
+        }
+    }
+
+    async scanServerDirectory(serverUrl) {
+        // 递归扫描服务器目录结构
+        const folderTree = [];
+        
+        try {
+            console.log('开始递归扫描服务器目录:', serverUrl);
+            
+            // 从根目录开始扫描
+            await this.scanDirectoryRecursively(serverUrl, '', folderTree);
+            
+            console.log(`扫描完成，共找到 ${folderTree.length} 个文件夹层级`);
+            return folderTree;
+            
+        } catch (error) {
+            console.error('扫描服务器目录失败:', error);
+            throw new Error('无法访问服务器目录，请检查服务器地址和权限');
+        }
+    }
+
+    async scanDirectoryRecursively(baseUrl, currentPath, folderTree, depth = 0) {
+        const maxDepth = 10; // 防止无限递归
+        if (depth > maxDepth) {
+            console.warn('达到最大扫描深度，停止递归');
+            return;
+        }
+
+        const fullUrl = new URL(currentPath, baseUrl).href;
+        console.log(`扫描目录: ${fullUrl}, 深度: ${depth}`);
+
+        try {
+            const response = await fetch(fullUrl);
+            if (!response.ok) {
+                console.warn(`无法访问目录: ${fullUrl}, 状态: ${response.status}`);
+                return;
+            }
+
+            // 检查响应类型
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                // JSON格式响应，处理API数据
+                const data = await response.json();
+                console.log('收到JSON响应:', data);
+                
+                if (data.success && data.shows) {
+                    // 处理shows/episodes结构
+                    for (const [showName, showData] of Object.entries(data.shows)) {
+                        if (showData.episodes) {
+                            for (const [episodeName, episodeData] of Object.entries(showData.episodes)) {
+                                if (episodeData.audioFiles && episodeData.audioFiles.length > 0) {
+                                    const songFolder = {
+                                        name: `${showName} - ${episodeName}`,
+                                        path: `${showName}/${episodeName}`,
+                                        url: new URL(`${showName}/${episodeName}/`, baseUrl).href,
+                                        audioFiles: episodeData.audioFiles,
+                                        lrcFiles: episodeData.scriptFiles || [],
+                                        isSongFolder: true,
+                                        showName: showName,
+                                        episodeName: episodeName
+                                    };
+                                    
+                                    folderTree.push(songFolder);
+                                    console.log(`找到歌曲目录: ${songFolder.name}, 音频文件: ${songFolder.audioFiles.length}, 歌词文件: ${songFolder.lrcFiles.length}`);
+                                }
+                            }
+                        }
+                    }
+                } else if (data.success && data.folders) {
+                    // 处理原有的folders结构
+                    for (const [folderName, folderData] of Object.entries(data.folders)) {
+                        if (folderData.audioFiles && folderData.audioFiles.length > 0) {
+                            const songFolder = {
+                                name: folderName,
+                                path: folderName,
+                                url: new URL(`${folderName}/`, baseUrl).href,
+                                audioFiles: folderData.audioFiles,
+                                lrcFiles: folderData.scriptFiles || [],
+                                isSongFolder: true
+                            };
+                            
+                            folderTree.push(songFolder);
+                            console.log(`找到歌曲目录: ${songFolder.name}, 音频文件: ${songFolder.audioFiles.length}, 歌词文件: ${songFolder.lrcFiles.length}`);
+                        }
+                    }
+                }
+            } else {
+                // HTML格式响应，处理目录浏览
+                const html = await response.text();
+                
+                // 解析HTML中的链接
+                const links = html.match(/href="([^"]+)"/gi);
+                if (!links) {
+                    console.log(`目录 ${fullUrl} 中没有找到链接`);
+                    return;
+                }
+
+                const folders = [];
+                const files = [];
+
+                for (const link of links) {
+                    const match = link.match(/href="([^"]+)"/);
+                    if (match) {
+                        const href = match[1];
+                        
+                        // 跳过父目录链接
+                        if (href === '../' || href === './') {
+                            continue;
+                        }
+
+                        // 检查是否是文件夹（以斜杠结尾）
+                        if (href.endsWith('/')) {
+                            const folderName = href.replace('/', '');
+                            folders.push(folderName);
+                        } else {
+                            // 检查是否是音频或歌词文件
+                            const fileType = this.getFileType(href);
+                            if (fileType === 'audio' || fileType === 'lrc') {
+                                files.push(href);
+                            }
+                        }
+                    }
+                }
+
+                // 如果当前目录有音频文件，说明这是歌曲目录
+                const hasAudioFiles = files.some(file => this.getFileType(file) === 'audio');
+                
+                if (hasAudioFiles) {
+                    // 这是歌曲目录，添加到结果中
+                    const songFolder = {
+                        name: currentPath.split('/').filter(p => p).pop() || '根目录',
+                        path: currentPath,
+                        url: fullUrl,
+                        audioFiles: files.filter(file => this.getFileType(file) === 'audio'),
+                        lrcFiles: files.filter(file => this.getFileType(file) === 'lrc'),
+                        isSongFolder: true
+                    };
+                    
+                    folderTree.push(songFolder);
+                    console.log(`找到歌曲目录: ${songFolder.name}, 音频文件: ${songFolder.audioFiles.length}, 歌词文件: ${songFolder.lrcFiles.length}`);
+                } else if (folders.length > 0) {
+                    // 这是中间目录，继续递归扫描
+                    for (const folder of folders) {
+                        const newPath = currentPath + folder + '/';
+                        await this.scanDirectoryRecursively(baseUrl, newPath, folderTree, depth + 1);
+                    }
+                }
+            }
+
+        } catch (error) {
+            console.error(`扫描目录失败 ${fullUrl}:`, error);
+        }
+    }
+
+    getFileType(fileName) {
+        const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'];
+        const lrcExtensions = ['.lrc', '.txt'];
+        
+        const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+        
+        if (audioExtensions.includes(ext)) return 'audio';
+        if (lrcExtensions.includes(ext)) return 'lrc';
+        return 'other';
+    }
+
+    async processServerFolder(songFolder) {
+        console.log(`处理服务器歌曲文件夹: ${songFolder.name}`);
+        
+        try {
+            // 检查是否有音频文件
+            if (!songFolder.audioFiles || songFolder.audioFiles.length === 0) {
+                console.warn(`歌曲文件夹 ${songFolder.name} 中没有找到音频文件`);
+                return;
+            }
+            
+            // 选择第一个音频文件
+            const audioFileName = songFolder.audioFiles[0];
+            
+            // 根据数据来源构建正确的文件URL
+            let audioFileUrl;
+            if (songFolder.showName && songFolder.episodeName) {
+                // JSON API格式：shows/episodes结构
+                // 从songFolder.url中提取基础URL
+                const baseUrl = songFolder.url.replace(songFolder.path + '/', '');
+                audioFileUrl = new URL(`${songFolder.showName}/${songFolder.episodeName}/${audioFileName}`, baseUrl).href;
+            } else {
+                // 普通文件夹结构
+                audioFileUrl = new URL(audioFileName, songFolder.url).href;
+            }
+            
+            // 查找对应的歌词文件
+            let lrcFileUrl = null;
+            if (songFolder.lrcFiles && songFolder.lrcFiles.length > 0) {
+                // 尝试找到与音频文件同名的歌词文件
+                const audioBaseName = audioFileName.substring(0, audioFileName.lastIndexOf('.'));
+                const matchingLrcFile = songFolder.lrcFiles.find(lrcFile => {
+                    const lrcBaseName = lrcFile.substring(0, lrcFile.lastIndexOf('.'));
+                    return lrcBaseName === audioBaseName;
+                });
+                
+                if (matchingLrcFile) {
+                    if (songFolder.showName && songFolder.episodeName) {
+                        // JSON API格式
+                        const baseUrl = songFolder.url.replace(songFolder.path + '/', '');
+                        lrcFileUrl = new URL(`${songFolder.showName}/${songFolder.episodeName}/${matchingLrcFile}`, baseUrl).href;
+                    } else {
+                        // 普通文件夹结构
+                        lrcFileUrl = new URL(matchingLrcFile, songFolder.url).href;
+                    }
+                } else {
+                    // 如果没有找到同名文件，使用第一个歌词文件
+                    if (songFolder.showName && songFolder.episodeName) {
+                        const baseUrl = songFolder.url.replace(songFolder.path + '/', '');
+                        lrcFileUrl = new URL(`${songFolder.showName}/${songFolder.episodeName}/${songFolder.lrcFiles[0]}`, baseUrl).href;
+                    } else {
+                        lrcFileUrl = new URL(songFolder.lrcFiles[0], songFolder.url).href;
+                    }
+                }
+            }
+            
+            console.log(`找到音频文件: ${audioFileName}, URL: ${audioFileUrl}`);
+            if (lrcFileUrl) {
+                console.log(`找到歌词文件: ${songFolder.lrcFiles.find(f => new URL(f, songFolder.url).href === lrcFileUrl)}, URL: ${lrcFileUrl}`);
+            }
+            
+            // 创建歌曲对象
+            const song = {
+                id: Date.now() + Math.random(),
+                title: songFolder.name,
+                audioUrl: audioFileUrl,
+                lrcUrl: lrcFileUrl,
+                duration: 0,
+                lyrics: []
+            };
+            
+            // 验证文件URL是否可访问
+            try {
+                console.log(`验证音频文件URL: ${audioFileUrl}`);
+                const audioResponse = await fetch(audioFileUrl, { method: 'HEAD' });
+                if (!audioResponse.ok) {
+                    console.warn(`音频文件不可访问: ${audioResponse.status} ${audioResponse.statusText}`);
+                } else {
+                    console.log('音频文件URL验证成功');
+                }
+                
+                if (lrcFileUrl) {
+                    console.log(`验证歌词文件URL: ${lrcFileUrl}`);
+                    const lrcResponse = await fetch(lrcFileUrl, { method: 'HEAD' });
+                    if (!lrcResponse.ok) {
+                        console.warn(`歌词文件不可访问: ${lrcResponse.status} ${lrcResponse.statusText}`);
+                    } else {
+                        console.log('歌词文件URL验证成功');
+                    }
+                }
+            } catch (error) {
+                console.warn('文件URL验证失败:', error.message);
+            }
+            
+            // 预加载音频时长
+            try {
+                console.log(`预加载服务器音频时长: ${audioFileName}`);
+                const tempAudio = new Audio();
+                tempAudio.src = audioFileUrl;
+                
+                await new Promise((resolve, reject) => {
+                    tempAudio.addEventListener('loadedmetadata', () => {
+                        song.duration = tempAudio.duration;
+                        console.log(`服务器音频时长加载完成: ${song.duration}秒`);
+                        resolve();
+                    }, { once: true });
+                    tempAudio.addEventListener('error', reject, { once: true });
+                });
+            } catch (error) {
+                console.warn(`预加载服务器音频时长失败: ${error.message}`);
+            }
+            
+            // 处理歌词文件
+            if (lrcFileUrl) {
+                try {
+                    console.log(`开始处理服务器歌词文件: ${lrcFileUrl}`);
+                    const lrcText = await this.readServerLrcFile(lrcFileUrl);
+                    song.lyrics = this.parseLrc(lrcText);
+                    console.log(`服务器歌词解析完成，共 ${song.lyrics.length} 行`);
+                } catch (error) {
+                    console.warn(`处理服务器歌词文件失败: ${error.message}`);
+                }
+            }
+            
+            this.playlist.push(song);
+            console.log(`服务器歌曲 ${songFolder.name} 已添加到播放列表，时长: ${song.duration}秒`);
+            
+        } catch (error) {
+            console.error(`处理服务器歌曲文件夹 ${songFolder.name} 失败:`, error);
+        }
+    }
+
+    async readServerLrcFile(lrcUrl) {
+        try {
+            const response = await fetch(lrcUrl);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const text = await response.text();
+            return text;
+        } catch (error) {
+            throw new Error(`读取服务器歌词文件失败: ${error.message}`);
         }
     }
 
@@ -403,8 +1542,8 @@ class MusicPlayer {
             }
         }
         
-        this.playlist.push(song);
-        console.log(`歌曲 ${folderName} 已添加到播放列表，时长: ${song.duration}秒`);
+        this.localPlaylist.push(song);
+        console.log(`歌曲 ${folderName} 已添加到本地播放列表，时长: ${song.duration}秒`);
     }
 
     isAudioFile(fileName) {
@@ -653,13 +1792,26 @@ class MusicPlayer {
     }
 
     displayPlaylist() {
-        if (!this.playlistContainer) return;
+        const container = this.currentPlaylistType === 'local' ? this.localPlaylistContainer : this.serverPlaylistContainer;
+        if (!container) return;
         
-        this.playlistContainer.innerHTML = '';
+        container.innerHTML = '';
         
         if (this.playlist.length === 0) {
-            this.playlistContainer.innerHTML = '<div class="playlist-placeholder">请上传歌曲文件夹</div>';
+            const placeholderText = this.currentPlaylistType === 'local' ? '请上传本地文件夹' : '请加载服务器文件';
+            container.innerHTML = `<div class="playlist-placeholder">${placeholderText}</div>`;
             return;
+        }
+        
+        // 添加返回选择按钮（当播放列表只有一首歌时）
+        if (this.playlist.length === 1 && this.currentSelectionState) {
+            const backToSelectionBtn = document.createElement('div');
+            backToSelectionBtn.className = 'back-to-selection-btn';
+            backToSelectionBtn.innerHTML = '← 返回选择其他集数';
+            backToSelectionBtn.addEventListener('click', () => {
+                this.restoreSelectionState();
+            });
+            container.appendChild(backToSelectionBtn);
         }
         
         this.playlist.forEach((song, index) => {
@@ -684,12 +1836,15 @@ class MusicPlayer {
                 this.updatePlaylistDisplay();
             });
             
-            this.playlistContainer.appendChild(item);
+            container.appendChild(item);
         });
     }
 
     updatePlaylistDisplay() {
-        const items = this.playlistContainer.querySelectorAll('.playlist-item');
+        const container = this.currentPlaylistType === 'local' ? this.localPlaylistContainer : this.serverPlaylistContainer;
+        if (!container) return;
+        
+        const items = container.querySelectorAll('.playlist-item');
         items.forEach((item, index) => {
             if (index === this.currentPlaylistIndex) {
                 item.classList.add('active');
@@ -703,25 +1858,49 @@ class MusicPlayer {
         try {
             console.log(`开始加载歌曲: ${song.title}`);
             
-            // 创建音频URL
-            const audioUrl = URL.createObjectURL(song.audioFile);
-            this.audio.src = audioUrl;
+            // 根据歌曲类型选择加载方式
+            if (song.audioFile) {
+                // 本地文件
+                const audioUrl = URL.createObjectURL(song.audioFile);
+                this.audio.src = audioUrl;
+                console.log('加载本地文件:', audioUrl);
+            } else if (song.audioUrl) {
+                // 服务器文件
+                console.log('加载服务器文件:', song.audioUrl);
+                this.audio.src = song.audioUrl;
+            } else {
+                throw new Error('歌曲没有有效的音频文件');
+            }
             
             // 更新歌曲信息
-            this.songTitle.textContent = song.title;
+            if (this.songTitle) {
+                this.songTitle.textContent = song.title;
+            }
             this.lyrics = song.lyrics || [];
             this.currentLyricIndex = -1;
             
-                    // 显示歌词
-        this.displayLyrics();
-        
-        // 更新收藏数量
-        this.updateFavoritesCount();
+            // 同步底部播放栏歌曲标题
+            if (this.bottomSongTitle) {
+                this.bottomSongTitle.textContent = song.title;
+            }
+            
+            // 显示歌词
+            this.displayLyrics();
+            
+            // 更新收藏数量
+            this.updateFavoritesCount();
             
             // 等待音频加载完成
             await new Promise((resolve, reject) => {
-                this.audio.addEventListener('loadedmetadata', resolve, { once: true });
-                this.audio.addEventListener('error', reject, { once: true });
+                this.audio.addEventListener('loadedmetadata', () => {
+                    console.log('音频加载成功');
+                    resolve();
+                }, { once: true });
+                this.audio.addEventListener('error', (error) => {
+                    console.error('音频加载失败:', error);
+                    console.error('音频URL:', this.audio.src);
+                    reject(new Error(`音频加载失败: ${error.message}`));
+                }, { once: true });
             });
             
             // 如果歌曲时长未设置，则设置它
@@ -938,20 +2117,56 @@ class MusicPlayer {
     }
 
     updateLoopButtonState() {
-        this.loopBtn.classList.toggle('active', this.isLooping);
+        // 同步底部循环按钮状态
+        if (this.bottomLoopBtn) {
+            this.bottomLoopBtn.classList.toggle('active', this.isLooping);
+            
+            // 保持状态指示器元素
+            const bottomStatusIndicator = this.bottomLoopBtn.querySelector('.status-indicator');
+            
+            if (this.isLooping) {
+                this.bottomLoopBtn.innerHTML = '🔁<span class="status-indicator"></span>';
+            } else {
+                this.bottomLoopBtn.innerHTML = '🔁<span class="status-indicator"></span>';
+            }
+            
+            // 重新添加状态指示器
+            if (bottomStatusIndicator) {
+                this.bottomLoopBtn.appendChild(bottomStatusIndicator);
+            }
+        }
+    }
+    
+    switchPlaylist(type) {
+        this.currentPlaylistType = type;
         
-        // 保持状态指示器元素
-        const statusIndicator = this.loopBtn.querySelector('.status-indicator');
-        
-        if (this.isLooping) {
-            this.loopBtn.innerHTML = '🔁<span style="font-size: 10px; display: block;">循环</span>';
-        } else {
-            this.loopBtn.innerHTML = '🔁<span style="font-size: 10px; display: block;">单句</span>';
+        // 更新标签页状态
+        if (this.localPlaylistTab) {
+            this.localPlaylistTab.classList.toggle('active', type === 'local');
+        }
+        if (this.serverPlaylistTab) {
+            this.serverPlaylistTab.classList.toggle('active', type === 'server');
         }
         
-        // 重新添加状态指示器
-        if (statusIndicator) {
-            this.loopBtn.appendChild(statusIndicator);
+        // 更新播放列表显示
+        if (this.localPlaylistContainer) {
+            this.localPlaylistContainer.classList.toggle('active', type === 'local');
+        }
+        if (this.serverPlaylistContainer) {
+            this.serverPlaylistContainer.classList.toggle('active', type === 'server');
+        }
+        
+        // 更新当前播放列表
+        this.playlist = type === 'local' ? this.localPlaylist : this.serverPlaylist;
+        this.currentPlaylistIndex = -1;
+        
+        // 重新显示播放列表
+        this.displayPlaylist();
+        
+        // 如果切换到服务器播放列表且为空，显示加载提示
+        if (type === 'server' && this.serverPlaylist.length === 0) {
+            console.log('服务器播放列表为空');
+            this.updateStatus('点击"加载服务器文件"按钮来加载服务器内容', 'info');
         }
     }
 
@@ -1123,9 +2338,6 @@ class MusicPlayer {
 
     setVolume(volume) {
         this.audio.volume = volume / 100;
-        if (this.volumePercentage) {
-            this.volumePercentage.textContent = `${volume}%`;
-        }
     }
 
     setPlaybackRate(rate) {
@@ -1138,11 +2350,30 @@ class MusicPlayer {
         
         if (duration > 0) {
             const percentage = (currentTime / duration) * 100;
-            this.progressFill.style.width = percentage + '%';
-            this.progressSlider.value = currentTime;
+            if (this.progressFill) {
+                this.progressFill.style.width = percentage + '%';
+            }
+            if (this.progressSlider) {
+                this.progressSlider.value = currentTime;
+            }
+            
+            // 同步底部播放栏进度
+            if (this.bottomProgressFill) {
+                this.bottomProgressFill.style.width = percentage + '%';
+            }
+            if (this.bottomProgressSlider) {
+                this.bottomProgressSlider.value = currentTime;
+            }
         }
         
-        this.currentTimeSpan.textContent = this.formatTime(currentTime);
+        if (this.currentTimeSpan) {
+            this.currentTimeSpan.textContent = this.formatTime(currentTime);
+        }
+        
+        // 同步底部播放栏时间显示
+        if (this.bottomCurrentTimeSpan) {
+            this.bottomCurrentTimeSpan.textContent = this.formatTime(currentTime);
+        }
     }
 
     formatTime(seconds) {
@@ -1392,6 +2623,48 @@ class MusicPlayer {
         } catch (error) {
             console.error('保存收藏到文件失败:', error);
             this.updateStatus('保存收藏到文件失败', 'error');
+        }
+    }
+    
+    // 自动加载服务器文件
+    async autoLoadServerFiles() {
+        try {
+            console.log('自动加载服务器文件...');
+            this.updateStatus('正在自动加载服务器文件...', 'info');
+            
+            // 获取服务器地址
+            const serverUrl = this.config.server.url;
+            if (!serverUrl) {
+                console.log('未配置服务器地址，跳过自动加载');
+                return;
+            }
+            
+            // 获取服务器目录结构
+            const directoryStructure = await this.getServerDirectoryStructure(serverUrl);
+            
+            if (!directoryStructure || Object.keys(directoryStructure).length === 0) {
+                console.log('服务器上没有找到文件夹，跳过自动加载');
+                return;
+            }
+            
+            // 自动选择第一个可用的文件夹或剧集
+            const firstKey = Object.keys(directoryStructure)[0];
+            const firstItem = directoryStructure[firstKey];
+            
+            // 显示剧名选择界面
+            console.log(`显示剧名选择界面`);
+            
+            // 确保切换到服务器播放列表
+            this.switchPlaylist('server');
+            
+            this.showFolderSelection(directoryStructure, serverUrl);
+            
+            console.log('服务器文件自动加载完成');
+            this.updateStatus('服务器文件自动加载完成', 'success');
+            
+        } catch (error) {
+            console.error('自动加载服务器文件失败:', error);
+            this.updateStatus('自动加载服务器文件失败: ' + error.message, 'error');
         }
     }
     
