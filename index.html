@@ -20,49 +20,39 @@
                             <label for="folderInput">选择文件夹:</label>
                             <input type="file" id="folderInput" webkitdirectory directory multiple>
                         </div>
+                        <div class="server-section" style="display: none;">
+                            <label for="serverInput">服务器地址:</label>
+                            <input type="text" id="serverInput" placeholder="请输入完整的服务器API地址，例如: http://api.example.com/folders">
+                            <button id="loadServerBtn" class="load-server-btn">加载服务器文件</button>
+                        </div>
                     </div>
                     
                     <div class="playlist-container">
-                        <h3>播放列表</h3>
-                        <div class="playlist" id="playlist">
-                            <div class="playlist-placeholder">请上传文件夹</div>
+                        <div class="playlist-header">
+                            <h3>播放列表</h3>
+                            <div class="playlist-tabs">
+                                <button id="localPlaylistTab" class="playlist-tab active" data-playlist="local">
+                                    <span class="tab-icon">📁</span>
+                                    <span class="tab-text">本地</span>
+                                </button>
+                                <button id="serverPlaylistTab" class="playlist-tab" data-playlist="server">
+                                    <span class="tab-icon">🌐</span>
+                                    <span class="tab-text">服务器</span>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="audio-info">
-                        <div class="current-song">
-                            <span id="songTitle">未选择音频文件</span>
-                        </div>
-                        <div class="current-time">
-                            <span id="currentTime">00:00</span> / <span id="totalTime">00:00</span>
+                        
+                        <div class="playlist-content">
+                            <div id="localPlaylist" class="playlist active">
+                                <div class="playlist-placeholder">请上传本地文件夹</div>
+                            </div>
+                            <div id="serverPlaylist" class="playlist">
+                                <div class="playlist-placeholder">请加载服务器文件</div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="controls">
-                        <div class="control-buttons">
-                            <button id="playPauseBtn" class="control-btn">
-                                <span class="play-icon">▶</span>
-                            </button>
-                            <button id="prevBtn" class="control-btn">⏮</button>
-                            <button id="nextBtn" class="control-btn">⏭</button>
-                            <button id="loopBtn" class="control-btn" title="单句循环">
-                                🔁
-                                <span class="status-indicator"></span>
-                            </button>
-                        </div>
-                        
-                        <div class="speed-control">
-                            <label for="speedSelect">倍速:</label>
-                            <select id="speedSelect">
-                                <option value="0.5">0.5x</option>
-                                <option value="0.75">0.75x</option>
-                                <option value="1" selected>1x</option>
-                                <option value="1.25">1.25x</option>
-                                <option value="1.5">1.5x</option>
-                                <option value="2">2x</option>
-                            </select>
-                        </div>
-                        
                         <div class="translation-control">
                             <label class="ios-switch">
                                 <input type="checkbox" id="translationToggle">
@@ -81,21 +71,6 @@
                         </div>
                     </div>
 
-                    <div class="progress-container">
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="progressFill"></div>
-                        </div>
-                        <input type="range" id="progressSlider" min="0" max="100" value="0" class="progress-slider">
-                    </div>
-
-                    <div class="volume-control">
-                        <label for="volumeSlider">🔊</label>
-                        <div class="volume-container">
-                            <input type="range" id="volumeSlider" min="0" max="100" value="100" class="volume-slider">
-                            <span class="volume-percentage" id="volumePercentage">100%</span>
-                        </div>
-                    </div>
-                    
 
                 </div>
             </div>
@@ -113,6 +88,52 @@
                         <div class="lyric-placeholder">请上传LRC文件</div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部固定的播放控制栏 -->
+    <div class="bottom-player-bar">
+        <div class="bottom-player-content">
+            <div class="bottom-audio-info">
+                <div class="bottom-current-song">
+                    <span id="bottomSongTitle">未选择音频文件</span>
+                </div>
+                <div class="bottom-current-time">
+                    <span id="bottomCurrentTime">00:00</span> / <span id="bottomTotalTime">00:00</span>
+                </div>
+            </div>
+            
+            <div class="bottom-controls">
+                <div class="bottom-control-buttons">
+                    <button id="bottomPrevBtn" class="bottom-control-btn">⏮</button>
+                    <button id="bottomPlayPauseBtn" class="bottom-control-btn">
+                        <span class="play-icon">▶</span>
+                    </button>
+                    <button id="bottomNextBtn" class="bottom-control-btn">⏭</button>
+                    <button id="bottomLoopBtn" class="bottom-control-btn" title="单句循环">
+                        🔁
+                        <span class="status-indicator"></span>
+                    </button>
+                </div>
+                <div class="bottom-speed-control">
+                    <label for="bottomSpeedSelect">倍速:</label>
+                    <select id="bottomSpeedSelect">
+                        <option value="0.5">0.5x</option>
+                        <option value="0.75">0.75x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="bottom-progress-container">
+                <div class="bottom-progress-bar">
+                    <div class="bottom-progress-fill" id="bottomProgressFill"></div>
+                </div>
+                <input type="range" id="bottomProgressSlider" min="0" max="100" value="0" class="bottom-progress-slider">
             </div>
         </div>
     </div>
@@ -136,6 +157,7 @@
         </div>
     </div>
 
+    <script src="config.js"></script>
     <script src="script.js"></script>
 </body>
 </html> 
